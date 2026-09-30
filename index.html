@@ -1,0 +1,859 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="theme-color" content="#08090c" />
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; media-src blob: data:; img-src data: blob:; connect-src 'none'; object-src 'none'; frame-src 'none'; base-uri 'none'; form-action 'none'" />
+<title>7 Video Stage + HQ Renderer</title>
+<style>
+:root{
+  color-scheme:dark;
+  --bg:#08090c;--panel:#141821;--panel2:#202633;--line:#343b4b;
+  --text:#f5f7fb;--muted:#a3adbc;--accent:#4d8dff;--danger:#ff6f7d;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;min-height:100%;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Helvetica Neue","Hiragino Sans","Yu Gothic",sans-serif}
+body{padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);overflow-x:hidden}
+button,.fileLabel,select{border:1px solid var(--line);background:var(--panel2);color:var(--text);border-radius:10px;min-height:42px;padding:9px 12px;font-size:14px;font-weight:700;touch-action:manipulation}
+button.primary,.fileLabel.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+button.danger{color:#ffb2ba}button:disabled{opacity:.42}
+button.active{outline:2px solid var(--accent);outline-offset:1px}
+.fileLabel{display:inline-flex;align-items:center;justify-content:center;cursor:pointer}
+input[type=file]{position:fixed;left:-10000px;width:1px;height:1px;opacity:0;pointer-events:none}
+
+header{position:sticky;top:0;z-index:100;background:rgba(8,9,12,.95);backdrop-filter:blur(14px);border-bottom:1px solid var(--line);padding:10px 12px}
+.toolbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+h1{font-size:17px;margin:0 8px 0 0;white-space:nowrap}
+.sep{width:1px;height:30px;background:var(--line);margin:0 2px}
+.status{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-top:8px;color:var(--muted);font-size:12px}
+.badge{padding:3px 8px;border-radius:999px;border:1px solid #28543c;background:#12241b;color:#9de9ba}
+
+.workspace{padding:12px;display:flex;flex-direction:column;align-items:center;gap:10px}
+.stageShell{width:100%;min-height:0;display:flex;justify-content:center;align-items:center}
+.stage{
+  position:relative;overflow:hidden;background:#000;border:1px solid #222832;box-shadow:0 14px 50px rgba(0,0,0,.42);
+  height:calc(100vh - 205px);
+  width:auto;
+  max-width:92vw;
+  aspect-ratio:var(--stage-ratio);
+  user-select:none;-webkit-user-select:none;
+}
+.stage[data-ratio="9:16"]{--stage-ratio:9/16}
+.stage[data-ratio="3:4"]{--stage-ratio:3/4}
+
+.slot{position:absolute;border:1px solid rgba(255,255,255,.33);background:#0d1118;overflow:hidden;touch-action:none}
+.slot video{width:100%;height:100%;display:block;background:#000;object-fit:cover;pointer-events:none}
+.slot.contain video{object-fit:contain}
+.slot.empty::before{content:"";position:absolute;inset:0;background:linear-gradient(135deg,rgba(255,255,255,.025),rgba(255,255,255,.005));z-index:0}
+.emptyText{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#697487;font-weight:800;font-size:clamp(12px,2vw,24px);z-index:1;pointer-events:none}
+.slotNo{position:absolute;left:5px;top:5px;z-index:5;background:rgba(0,0,0,.65);border:1px solid rgba(255,255,255,.18);border-radius:999px;padding:3px 7px;font-size:11px;font-weight:800;pointer-events:none}
+.slotName{position:absolute;left:0;right:0;bottom:0;z-index:4;padding:18px 7px 5px;background:linear-gradient(transparent,rgba(0,0,0,.7));font-size:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;pointer-events:none}
+.slotTools{display:none;position:absolute;z-index:7;right:5px;top:5px;gap:4px}
+.slotTools button{min-height:30px;padding:4px 7px;font-size:11px;border-radius:7px;background:rgba(12,15,21,.82)}
+.resizeHandle{display:none;position:absolute;z-index:8;right:0;bottom:0;width:28px;height:28px;background:linear-gradient(135deg,transparent 0 48%,rgba(255,255,255,.86) 49% 57%,transparent 58% 66%,rgba(255,255,255,.86) 67% 75%,transparent 76%);cursor:nwse-resize}
+.stage.editing .slot{outline:2px dashed rgba(77,141,255,.74);outline-offset:-2px;cursor:move}
+.stage.editing .slotTools{display:flex}
+.stage.editing .resizeHandle{display:block}
+.stage:not(.editing) .slotNo,.stage:not(.editing) .slotName{opacity:0;transition:opacity .2s}
+.stage:not(.editing):hover .slotNo,.stage:not(.editing):hover .slotName{opacity:1}
+
+.timelinePanel{width:min(920px,100%);display:grid;grid-template-columns:auto 1fr auto;gap:9px;align-items:center;color:var(--muted);font-size:12px}
+input[type=range]{width:100%;accent-color:var(--accent)}
+.help{max-width:900px;color:var(--muted);font-size:12px;line-height:1.65;padding:0 4px 18px}
+
+body.projecting{padding:0;overflow:hidden;background:#000}
+body.projecting header,body.projecting .timelinePanel,body.projecting .help{display:none}
+body.projecting .workspace{padding:0;width:100vw;height:100dvh;display:flex;align-items:center;justify-content:center}
+body.projecting .stageShell{width:100%;height:100%;display:flex;align-items:center;justify-content:center}
+body.projecting .stage{border:0;box-shadow:none;height:100vh;height:100dvh;width:auto;max-width:100vw;max-height:100vh;max-height:100dvh}
+body.projecting .stage .slotNo,body.projecting .stage .slotName,body.projecting .stage .slotTools,body.projecting .stage .resizeHandle{display:none!important}
+.projectExit{display:none;position:fixed;z-index:999;right:max(12px,env(safe-area-inset-right));top:max(12px,env(safe-area-inset-top));opacity:.18}
+body.projecting .projectExit{display:block}
+body.projecting .projectExit:active{opacity:.9}
+
+
+.renderPanel{width:min(980px,100%);border:1px solid var(--line);background:var(--panel);border-radius:14px;padding:12px;display:none;gap:12px}
+.renderPanel.open{display:grid}
+.renderHead{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+.renderHead strong{font-size:15px}.renderCompat{font-size:11px;color:var(--muted)}
+.renderControls{display:flex;gap:8px;align-items:end;flex-wrap:wrap}
+.renderControls label{display:grid;gap:4px;color:var(--muted);font-size:11px;font-weight:700}
+.renderControls select{min-width:115px}
+.renderProgress{width:100%;height:16px;accent-color:var(--accent)}
+.renderStatus{font-weight:800;font-size:13px}.renderDetails{font-size:11px;color:var(--muted);line-height:1.55}
+.renderCanvasWrap{display:none;justify-content:center;background:#050608;border:1px solid var(--line);border-radius:10px;padding:8px;overflow:hidden}
+.renderPanel.running .renderCanvasWrap{display:flex}
+#renderCanvas{display:block;max-width:100%;max-height:38vh;background:#000}
+.renderResult{display:grid;gap:8px;border-top:1px solid var(--line);padding-top:10px}
+.renderResult[hidden]{display:none}.renderResult video{width:min(420px,100%);max-height:42vh;background:#000;border-radius:8px}
+.resultActions{display:flex;gap:8px;flex-wrap:wrap}.downloadBtn{text-decoration:none;border:1px solid var(--accent);background:var(--accent);color:#fff;border-radius:10px;min-height:42px;padding:9px 12px;font-size:14px;font-weight:800;display:inline-flex;align-items:center}
+
+@media (max-width:780px){
+  h1{width:100%}.sep{display:none}
+  .stage{height:calc(100vh - 255px);width:auto;max-width:95vw}
+}
+</style>
+</head>
+<body>
+<header>
+  <div class="toolbar">
+    <h1>7 Video Stage</h1>
+    <label class="fileLabel primary" for="multiPicker">7本まとめて選択</label>
+    <input id="multiPicker" type="file" accept="video/*" multiple />
+    <select id="ratio" aria-label="画面比率">
+      <option value="9:16">画面 9:16</option>
+      <option value="3:4">画面 3:4</option>
+    </select>
+    <button id="editBtn" class="active">✥ 配置編集 ON</button>
+    <button id="presetBtn">7分割プリセット</button>
+    <button id="saveBtn">配置を保存</button>
+    <span class="sep"></span>
+    <button id="playAll">▶︎ 一括再生</button>
+    <button id="pauseAll">⏸ 停止</button>
+    <button id="zeroAll">↺ 先頭</button>
+    <select id="rate" aria-label="再生速度">
+      <option value="0.5">0.5×</option><option value="0.75">0.75×</option>
+      <option value="1" selected>1.0×</option><option value="1.25">1.25×</option><option value="1.5">1.5×</option><option value="2">2.0×</option>
+    </select>
+    <button id="fitBtn">表示: 全面</button>
+    <button id="renderToggle">🎬 動画作成</button>
+    <button id="projectBtn" class="primary">⛶ 投影モード</button>
+    <button id="clearBtn" class="danger">動画を全解除</button>
+  </div>
+  <div class="status">
+    <span id="count">0 / 7 本</span>
+    <span class="badge">動画は端末内のみ</span>
+    <span>枠をドラッグ、右下をドラッグでサイズ変更</span>
+  </div>
+</header>
+
+<main class="workspace">
+  <div class="stageShell">
+    <div id="stage" class="stage editing" data-ratio="9:16" aria-label="7動画ステージ"></div>
+  </div>
+  <div class="timelinePanel">
+    <span id="timeNow">0:00</span>
+    <input id="masterSeek" type="range" min="0" max="1" value="0" step="0.01" aria-label="一括シーク" />
+    <span id="timeMax">0:00</span>
+  </div>
+
+  <section id="renderPanel" class="renderPanel" aria-label="動画レンダリング">
+    <div class="renderHead">
+      <strong>🎬 7画面を1本の動画にレンダリング</strong>
+      <span id="renderCompat" class="renderCompat"></span>
+    </div>
+    <div class="renderControls">
+      <label>レンダリング方式
+        <select id="renderMode">
+          <option value="hq" selected>高画質：1回だけ圧縮</option>
+          <option value="compat">互換：多段合成</option>
+        </select>
+      </label>
+      <label>出力サイズ
+        <select id="renderSize">
+          <option value="540">軽量 540px幅</option>
+          <option value="720" selected>標準 720px幅</option>
+          <option value="1080">高画質 1080px幅</option>
+        </select>
+      </label>
+      <label>フレームレート
+        <select id="renderFps">
+          <option value="15">15 fps</option>
+          <option value="24" selected>24 fps</option>
+          <option value="30">30 fps</option>
+        </select>
+      </label>
+      <label>レンダリング範囲
+        <select id="renderLength">
+          <option value="10">テスト 10秒</option>
+          <option value="30">テスト 30秒</option>
+          <option value="all" selected>最長動画まで</option>
+        </select>
+      </label>
+      <button id="renderStart" class="primary">▶ レンダリング開始</button>
+      <button id="renderCancel" class="danger" disabled>■ 中止</button>
+    </div>
+    <div id="renderStatus" class="renderStatus">待機中</div>
+    <progress id="renderProgress" class="renderProgress" max="1" value="0"></progress>
+    <div id="renderDetails" class="renderDetails">高画質モードは元動画を1本ずつ読み、短い区間ごとに7枠を合成して最後に1回だけVP8/WebMへ圧縮します。旧来の多段合成より画質劣化を抑えますが、処理時間は長くなります。音声は出力しません。レンダリング中は画面を消さないでください。</div>
+    <div class="renderCanvasWrap"><canvas id="renderCanvas"></canvas></div>
+    <div id="renderResult" class="renderResult" hidden>
+      <strong>完成動画</strong>
+      <video id="renderResultVideo" controls playsinline></video>
+      <div class="resultActions">
+        <a id="renderDownload" class="downloadBtn">⬇ 動画を保存</a>
+        <button id="renderDiscard">結果を破棄</button>
+      </div>
+    </div>
+  </section>
+
+  <div class="help">
+    配置編集ONでは、7つの枠を自由に移動・拡大縮小できます。各枠の「動画」から1本ずつ差し替えることもできます。
+    「配置を保存」は枠の位置・大きさ・画面比率だけをこのブラウザ内に保存します。動画ファイルそのものは保存・送信しません。
+    投影時は「投影モード」を押すと操作UIを消し、ステージだけを黒背景で表示します。<br>
+    「動画作成」の高画質モードは、元動画を1本ずつ順番に読み出し、短い区間単位でフレームを合成して最後に1回だけ圧縮します。7本の同時再生を前提にしないため、同時デコーダ数の制限を避けやすく、従来の多段合成より画質劣化も少なくなります。端末でWebCodecsが使えない場合は互換モードを利用できます。
+  </div>
+</main>
+<button id="projectExit" class="projectExit">操作画面へ戻る</button>
+<input id="singlePicker" type="file" accept="video/*" />
+
+<script>
+(() => {
+'use strict';
+const MAX=7, STORE='seven-video-stage-layout-v2';
+const stage=document.getElementById('stage');
+const multiPicker=document.getElementById('multiPicker');
+const singlePicker=document.getElementById('singlePicker');
+const ratioSel=document.getElementById('ratio');
+const editBtn=document.getElementById('editBtn');
+const presetBtn=document.getElementById('presetBtn');
+const saveBtn=document.getElementById('saveBtn');
+const playAll=document.getElementById('playAll');
+const pauseAll=document.getElementById('pauseAll');
+const zeroAll=document.getElementById('zeroAll');
+const rateSel=document.getElementById('rate');
+const fitBtn=document.getElementById('fitBtn');
+const renderToggle=document.getElementById('renderToggle');
+const renderPanel=document.getElementById('renderPanel');
+const renderMode=document.getElementById('renderMode');
+const renderSize=document.getElementById('renderSize');
+const renderFps=document.getElementById('renderFps');
+const renderLength=document.getElementById('renderLength');
+const renderStart=document.getElementById('renderStart');
+const renderCancel=document.getElementById('renderCancel');
+const renderCompat=document.getElementById('renderCompat');
+const renderStatus=document.getElementById('renderStatus');
+const renderProgress=document.getElementById('renderProgress');
+const renderDetails=document.getElementById('renderDetails');
+const renderCanvas=document.getElementById('renderCanvas');
+const renderResult=document.getElementById('renderResult');
+const renderResultVideo=document.getElementById('renderResultVideo');
+const renderDownload=document.getElementById('renderDownload');
+const renderDiscard=document.getElementById('renderDiscard');
+const projectBtn=document.getElementById('projectBtn');
+const projectExit=document.getElementById('projectExit');
+const clearBtn=document.getElementById('clearBtn');
+const count=document.getElementById('count');
+const masterSeek=document.getElementById('masterSeek');
+const timeNow=document.getElementById('timeNow');
+const timeMax=document.getElementById('timeMax');
+
+let editing=true, fitMode='cover', pickingIndex=null, seeking=false;
+let rendering=false, renderAbort=false, activeRecorder=null, activeRenderVideos=[], activeRenderStream=null, activeHQVideo=null, activeHQEncoder=null, renderResultUrl=null, wakeLock=null;
+const slots=[];
+
+function fmt(sec){
+  if(!Number.isFinite(sec)) return '0:00';
+  sec=Math.max(0,Math.floor(sec));
+  const h=Math.floor(sec/3600),m=Math.floor((sec%3600)/60),s=sec%60;
+  return h?`${h}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`:`${m}:${String(s).padStart(2,'0')}`;
+}
+function clamp(v,a,b){return Math.min(b,Math.max(a,v));}
+function loadedSlots(){return slots.filter(s=>s.video && s.url);}
+function updateCount(){count.textContent=`${loadedSlots().length} / ${MAX} 本`;}
+function updateSeekBounds(){
+  const ds=loadedSlots().map(s=>s.video.duration).filter(Number.isFinite);
+  const max=ds.length?Math.max(...ds):0;
+  masterSeek.max=String(Math.max(1,max));
+  timeMax.textContent=fmt(max);
+}
+function applyFit(){
+  slots.forEach(s=>s.el.classList.toggle('contain',fitMode==='contain'));
+  fitBtn.textContent=fitMode==='cover'?'表示: 全面':'表示: 全体';
+}
+function cleanupSlot(s){
+  if(s.video){try{s.video.pause();}catch(_){};s.video.removeAttribute('src');s.video.load();s.video.remove();s.video=null;}
+  if(s.url){URL.revokeObjectURL(s.url);s.url=null;}
+  s.file=null;s.name.textContent='';s.el.classList.add('empty');s.empty.style.display='flex';
+}
+function setFile(index,file){
+  if(!file || !file.type.startsWith('video/')) return;
+  const s=slots[index];cleanupSlot(s);
+  const url=URL.createObjectURL(file);
+  const v=document.createElement('video');
+  v.src=url;v.preload='metadata';v.playsInline=true;v.muted=true;v.setAttribute('playsinline','');v.setAttribute('webkit-playsinline','');
+  v.addEventListener('loadedmetadata',()=>{v.playbackRate=Number(rateSel.value);updateSeekBounds();});
+  v.addEventListener('durationchange',updateSeekBounds);
+  v.addEventListener('error',()=>{s.name.textContent=`⚠ ${file.name}`;});
+  s.el.insertBefore(v,s.el.firstChild);
+  s.video=v;s.url=url;s.file=file;s.name.textContent=file.name;s.empty.style.display='none';s.el.classList.remove('empty');
+  applyFit();updateCount();
+}
+function clearVideos(){slots.forEach(cleanupSlot);updateCount();updateSeekBounds();masterSeek.value='0';timeNow.textContent='0:00';}
+
+function defaultLayout(){
+  return [
+    {x:3,y:2,w:45,h:28},{x:52,y:2,w:45,h:28},
+    {x:3,y:36,w:29,h:27},{x:35.5,y:36,w:29,h:27},{x:68,y:36,w:29,h:27},
+    {x:12,y:70,w:35,h:27},{x:53,y:70,w:35,h:27}
+  ];
+}
+function applyLayout(layout){
+  layout.forEach((p,i)=>{
+    if(!slots[i])return;
+    const x=clamp(Number(p.x)||0,0,95),y=clamp(Number(p.y)||0,0,95),w=clamp(Number(p.w)||20,5,100),h=clamp(Number(p.h)||20,5,100);
+    Object.assign(slots[i].el.style,{left:x+'%',top:y+'%',width:Math.min(w,100-x)+'%',height:Math.min(h,100-y)+'%'});
+  });
+}
+function captureLayout(){
+  return slots.map(s=>({x:parseFloat(s.el.style.left),y:parseFloat(s.el.style.top),w:parseFloat(s.el.style.width),h:parseFloat(s.el.style.height)}));
+}
+function saveLayout(){
+  try{localStorage.setItem(STORE,JSON.stringify({ratio:stage.dataset.ratio,layout:captureLayout()}));saveBtn.textContent='✓ 保存しました';setTimeout(()=>saveBtn.textContent='配置を保存',1200);}catch(_){saveBtn.textContent='保存できません';}
+}
+function loadLayout(){
+  try{
+    const d=JSON.parse(localStorage.getItem(STORE)||'null');
+    if(d&&Array.isArray(d.layout)&&d.layout.length===MAX){stage.dataset.ratio=d.ratio==='3:4'?'3:4':'9:16';ratioSel.value=stage.dataset.ratio;applyLayout(d.layout);return;}
+  }catch(_){}
+  applyLayout(defaultLayout());
+}
+
+function makeSlot(i){
+  const el=document.createElement('div');el.className='slot empty';el.dataset.index=String(i);
+  const empty=document.createElement('div');empty.className='emptyText';empty.textContent=`GROUP ${i+1}`;
+  const no=document.createElement('div');no.className='slotNo';no.textContent=String(i+1);
+  const name=document.createElement('div');name.className='slotName';
+  const tools=document.createElement('div');tools.className='slotTools';
+  const fileBtn=document.createElement('button');fileBtn.textContent='動画';
+  const muteBtn=document.createElement('button');muteBtn.textContent='🔇';
+  const delBtn=document.createElement('button');delBtn.textContent='×';delBtn.className='danger';
+  const resize=document.createElement('div');resize.className='resizeHandle';
+  tools.append(fileBtn,muteBtn,delBtn);el.append(empty,no,name,tools,resize);stage.append(el);
+  const s={el,empty,name,video:null,url:null,file:null,muteBtn};slots.push(s);
+  fileBtn.addEventListener('pointerdown',e=>e.stopPropagation());
+  muteBtn.addEventListener('pointerdown',e=>e.stopPropagation());
+  delBtn.addEventListener('pointerdown',e=>e.stopPropagation());
+  fileBtn.addEventListener('click',()=>{pickingIndex=i;singlePicker.click();});
+  muteBtn.addEventListener('click',()=>{if(!s.video)return;s.video.muted=!s.video.muted;muteBtn.textContent=s.video.muted?'🔇':'🔊';});
+  delBtn.addEventListener('click',()=>{cleanupSlot(s);updateCount();updateSeekBounds();});
+  installPointerEdit(el,resize);
+}
+
+function installPointerEdit(el,resizeHandle){
+  let mode=null,startX=0,startY=0,start={x:0,y:0,w:0,h:0},pid=null;
+  function down(e,isResize){
+    if(!editing)return;
+    if(e.target.closest('button'))return;
+    e.preventDefault();
+    const r=stage.getBoundingClientRect();
+    startX=e.clientX;startY=e.clientY;pid=e.pointerId;mode=isResize?'resize':'move';
+    start={x:parseFloat(el.style.left),y:parseFloat(el.style.top),w:parseFloat(el.style.width),h:parseFloat(el.style.height)};
+    (isResize?resizeHandle:el).setPointerCapture?.(pid);
+    function move(ev){
+      if(ev.pointerId!==pid)return;
+      const dx=(ev.clientX-startX)/r.width*100,dy=(ev.clientY-startY)/r.height*100;
+      if(mode==='move'){
+        const x=clamp(start.x+dx,0,100-start.w),y=clamp(start.y+dy,0,100-start.h);
+        el.style.left=x+'%';el.style.top=y+'%';
+      }else{
+        const w=clamp(start.w+dx,5,100-start.x),h=clamp(start.h+dy,5,100-start.y);
+        el.style.width=w+'%';el.style.height=h+'%';
+      }
+    }
+    function up(ev){
+      if(ev.pointerId!==pid)return;
+      window.removeEventListener('pointermove',move);window.removeEventListener('pointerup',up);window.removeEventListener('pointercancel',up);mode=null;pid=null;
+    }
+    window.addEventListener('pointermove',move,{passive:false});window.addEventListener('pointerup',up);window.addEventListener('pointercancel',up);
+  }
+  el.addEventListener('pointerdown',e=>{if(e.target===resizeHandle)return;down(e,false);});
+  resizeHandle.addEventListener('pointerdown',e=>{e.stopPropagation();down(e,true);});
+}
+
+for(let i=0;i<MAX;i++)makeSlot(i);
+loadLayout();applyFit();updateCount();
+
+multiPicker.addEventListener('change',()=>{
+  [...multiPicker.files].slice(0,MAX).forEach((f,i)=>setFile(i,f));multiPicker.value='';
+});
+singlePicker.addEventListener('change',()=>{
+  if(pickingIndex!==null&&singlePicker.files[0])setFile(pickingIndex,singlePicker.files[0]);pickingIndex=null;singlePicker.value='';
+});
+ratioSel.addEventListener('change',()=>{stage.dataset.ratio=ratioSel.value;});
+editBtn.addEventListener('click',()=>{
+  editing=!editing;stage.classList.toggle('editing',editing);editBtn.classList.toggle('active',editing);editBtn.textContent=editing?'✥ 配置編集 ON':'✥ 配置編集 OFF';
+});
+presetBtn.addEventListener('click',()=>applyLayout(defaultLayout()));
+saveBtn.addEventListener('click',saveLayout);
+fitBtn.addEventListener('click',()=>{fitMode=fitMode==='cover'?'contain':'cover';applyFit();});
+clearBtn.addEventListener('click',()=>{if(!rendering)clearVideos();});
+rateSel.addEventListener('change',()=>loadedSlots().forEach(s=>s.video.playbackRate=Number(rateSel.value)));
+
+playAll.addEventListener('click',async()=>{
+  const arr=loadedSlots(); if(!arr.length)return;
+  const when=performance.now()+100;
+  await Promise.all(arr.map(async s=>{const d=Math.max(0,when-performance.now());if(d)await new Promise(r=>setTimeout(r,d));try{await s.video.play();}catch(_){}}));
+});
+pauseAll.addEventListener('click',()=>loadedSlots().forEach(s=>s.video.pause()));
+zeroAll.addEventListener('click',()=>{loadedSlots().forEach(s=>{s.video.pause();try{s.video.currentTime=0}catch(_){}});masterSeek.value='0';timeNow.textContent='0:00';});
+
+masterSeek.addEventListener('pointerdown',()=>seeking=true);
+masterSeek.addEventListener('input',()=>{
+  const t=Number(masterSeek.value);timeNow.textContent=fmt(t);
+  loadedSlots().forEach(s=>{try{s.video.currentTime=Math.min(t,Number.isFinite(s.video.duration)?s.video.duration:t)}catch(_){}});
+});
+masterSeek.addEventListener('change',()=>seeking=false);
+setInterval(()=>{
+  if(seeking)return;
+  const first=loadedSlots()[0];if(!first)return;
+  masterSeek.value=String(first.video.currentTime||0);timeNow.textContent=fmt(first.video.currentTime||0);
+},250);
+
+
+function canRender(){
+  return !!(window.MediaRecorder && HTMLCanvasElement.prototype.captureStream);
+}
+function chooseRecorderType(){
+  if(!window.MediaRecorder) return {mime:'',ext:'webm'};
+  // Android ChromeはMP4 MediaRecorderでduration/timelineが不正になる端末があるためWebMを優先。
+  const android=/Android/i.test(navigator.userAgent||'');
+  const webm=[
+    ['video/webm;codecs=vp8','webm'],
+    ['video/webm;codecs=vp9','webm'],
+    ['video/webm','webm']
+  ];
+  const mp4=[
+    ['video/mp4;codecs=avc1.42E01E','mp4'],
+    ['video/mp4','mp4']
+  ];
+  const candidates=android?[...webm,...mp4]:[...mp4,...webm];
+  for(const [mime,ext] of candidates){
+    try{if(MediaRecorder.isTypeSupported(mime)) return {mime,ext};}catch(_){}
+  }
+  return {mime:'',ext:'webm'};
+}
+async function probeBlobDuration(blob){
+  const url=URL.createObjectURL(blob),v=document.createElement('video');
+  v.preload='metadata';v.muted=true;v.playsInline=true;v.src=url;
+  try{
+    if(v.readyState<1)await waitEvent(v,'loadedmetadata',15000);
+    let d=v.duration;
+    // 一部のMediaRecorder出力は初回metadataでInfinityになることがある。
+    if(!Number.isFinite(d)){
+      try{v.currentTime=1e9;await waitEvent(v,'timeupdate',3000);}catch(_){}
+      d=v.duration;
+    }
+    return Number.isFinite(d)?d:NaN;
+  }finally{
+    try{v.pause();v.removeAttribute('src');v.load();}catch(_){}
+    URL.revokeObjectURL(url);
+  }
+}
+function renderDimensions(base){
+  const w=Number(base);
+  const ratio=stage.dataset.ratio;
+  const h=ratio==='3:4'?Math.round(w*4/3):Math.round(w*16/9);
+  return {w,h};
+}
+function drawFit(ctx,video,x,y,w,h,mode){
+  if(!video || video.readyState<2 || !video.videoWidth || !video.videoHeight)return;
+  const sw=video.videoWidth,sh=video.videoHeight,src=sw/sh,dst=w/h;
+  if(mode==='contain'){
+    let dw=w,dh=h,dx=x,dy=y;
+    if(src>dst){dh=w/src;dy=y+(h-dh)/2;}else{dw=h*src;dx=x+(w-dw)/2;}
+    ctx.drawImage(video,dx,dy,dw,dh);
+  }else{
+    let sx=0,sy=0,sww=sw,shh=sh;
+    if(src>dst){sww=sh*dst;sx=(sw-sww)/2;}else{shh=sw/dst;sy=(sh-shh)/2;}
+    ctx.drawImage(video,sx,sy,sww,shh,x,y,w,h);
+  }
+}
+function waitEvent(el,name,timeout=12000){
+  return new Promise((resolve,reject)=>{
+    let done=false;
+    const ok=()=>{if(done)return;done=true;clearTimeout(tm);cleanup();resolve();};
+    const bad=()=>{if(done)return;done=true;clearTimeout(tm);cleanup();reject(new Error(`${name} に失敗しました`));};
+    const cleanup=()=>{el.removeEventListener(name,ok);el.removeEventListener('error',bad);};
+    const tm=setTimeout(()=>{cleanup();reject(new Error(`${name} がタイムアウトしました`));},timeout);
+    el.addEventListener(name,ok,{once:true});el.addEventListener('error',bad,{once:true});
+  });
+}
+async function makeRenderVideo(url){
+  const v=document.createElement('video');
+  v.src=url;v.preload='auto';v.muted=true;v.playsInline=true;v.setAttribute('playsinline','');v.setAttribute('webkit-playsinline','');
+  try{v.disableRemotePlayback=true;}catch(_){}
+  if(v.readyState<1)await waitEvent(v,'loadedmetadata',15000);
+  if(v.readyState<2){try{await waitEvent(v,'loadeddata',15000);}catch(_){}}
+  return v;
+}
+function recorderBlob(recorder,chunks){
+  return new Promise((resolve,reject)=>{
+    recorder.addEventListener('dataavailable',e=>{if(e.data&&e.data.size)chunks.push(e.data);});
+    recorder.addEventListener('error',e=>reject(e.error||new Error('録画エラー')),{once:true});
+    recorder.addEventListener('stop',()=>resolve(new Blob(chunks,{type:recorder.mimeType||chunks[0]?.type||'video/webm'})),{once:true});
+  });
+}
+function stopActiveRenderMedia(){
+  activeRenderVideos.forEach(v=>{try{v.pause();v.removeAttribute('src');v.load();}catch(_){}});activeRenderVideos=[];
+  if(activeRenderStream){try{activeRenderStream.getTracks().forEach(t=>t.stop());}catch(_){}activeRenderStream=null;}
+}
+function sleep(ms){return new Promise(r=>setTimeout(r,ms));}
+async function recordPass({baseBlob,sourceFile,slotIndex,duration,fps,width,height,pass,totalPasses,recType,bitrate}){
+  if(renderAbort)throw new DOMException('中止','AbortError');
+  const ctx=renderCanvas.getContext('2d',{alpha:false,desynchronized:true});
+  renderCanvas.width=width;renderCanvas.height=height;
+  const layout=captureLayout()[slotIndex];
+  const px={x:layout.x/100*width,y:layout.y/100*height,w:layout.w/100*width,h:layout.h/100*height};
+  const sourceUrl=URL.createObjectURL(sourceFile);
+  const baseUrl=baseBlob?URL.createObjectURL(baseBlob):null;
+  let base=null,source=null;
+  try{
+    source=await makeRenderVideo(sourceUrl);
+    if(baseUrl)base=await makeRenderVideo(baseUrl);
+    activeRenderVideos=[base,source].filter(Boolean);
+    try{source.currentTime=0;if(base)base.currentTime=0;}catch(_){}
+    await sleep(30);
+    ctx.fillStyle='#000';ctx.fillRect(0,0,width,height);
+    if(base)drawFit(ctx,base,0,0,width,height,'cover');
+    ctx.fillStyle='#000';ctx.fillRect(px.x,px.y,px.w,px.h);
+    drawFit(ctx,source,px.x,px.y,px.w,px.h,fitMode);
+    const stream=renderCanvas.captureStream(fps);activeRenderStream=stream;
+    const opts={videoBitsPerSecond:bitrate};if(recType.mime)opts.mimeType=recType.mime;
+    let recorder;
+    try{recorder=new MediaRecorder(stream,opts);}catch(_){recorder=new MediaRecorder(stream);}
+    activeRecorder=recorder;const chunks=[];const blobPromise=recorderBlob(recorder,chunks);
+    // timesliceを指定するとChrome/Androidでdurationメタデータが壊れることがあるため、連続1Blobで記録する。
+    recorder.start();
+    const plays=[];if(base)plays.push(base.play());plays.push(source.play());
+    await Promise.allSettled(plays);
+    const start=performance.now();
+    await new Promise((resolve,reject)=>{
+      let raf=0,lastUi=0;
+      const frame=()=>{
+        if(renderAbort){cancelAnimationFrame(raf);resolve();return;}
+        const elapsed=(performance.now()-start)/1000;
+        ctx.fillStyle='#000';ctx.fillRect(0,0,width,height);
+        if(base && base.readyState>=2)drawFit(ctx,base,0,0,width,height,'cover');
+        ctx.fillStyle='#000';ctx.fillRect(px.x,px.y,px.w,px.h);
+        if(source.readyState>=2)drawFit(ctx,source,px.x,px.y,px.w,px.h,fitMode);
+        const now=performance.now();
+        if(now-lastUi>180){
+          lastUi=now;
+          const t=Math.min(duration,elapsed),overall=(pass+t/duration)/totalPasses;
+          renderProgress.value=Math.min(1,overall);
+          renderStatus.textContent=`合成 ${pass+1} / ${totalPasses}：GROUP ${slotIndex+1}`;
+          renderDetails.textContent=`${fmt(t)} / ${fmt(duration)}　全体 ${Math.floor(overall*100)}%　（中止できます）`;
+        }
+        if(elapsed>=duration){resolve();return;}
+        raf=requestAnimationFrame(frame);
+      };
+      raf=requestAnimationFrame(frame);
+    });
+    activeRenderVideos.forEach(v=>{try{v.pause();}catch(_){}});
+    if(recorder.state!=='inactive')recorder.stop();
+    const out=await blobPromise;
+    if(renderAbort)throw new DOMException('中止','AbortError');
+    // 中間動画の時間軸が大きく壊れている場合、次段へ渡す前に止める。
+    const measured=await probeBlobDuration(out);
+    if(Number.isFinite(measured) && Math.abs(measured-duration)>1.25){
+      throw new Error(`中間動画の時間情報が不正です（目標 ${duration.toFixed(1)}秒 / 認識 ${measured.toFixed(1)}秒）。別形式または低いFPSで再試行してください`);
+    }
+    return out;
+  }finally{
+    activeRecorder=null;stopActiveRenderMedia();
+    URL.revokeObjectURL(sourceUrl);if(baseUrl)URL.revokeObjectURL(baseUrl);
+  }
+}
+
+function canHQRender(){
+  return typeof VideoEncoder!=='undefined' && typeof VideoFrame!=='undefined' && typeof createImageBitmap==='function';
+}
+async function pickHQEncoderConfig(width,height,fps,bitrate){
+  if(!canHQRender())return null;
+  const base={codec:'vp8',width,height,bitrate,framerate:fps,latencyMode:'quality'};
+  try{
+    const r=await VideoEncoder.isConfigSupported(base);
+    if(r.supported)return r.config;
+  }catch(_){}
+  const fallback={codec:'vp8',width,height,bitrate,framerate:fps};
+  try{
+    const r=await VideoEncoder.isConfigSupported(fallback);
+    return r.supported?r.config:null;
+  }catch(_){return null;}
+}
+function concatU8(parts){
+  const len=parts.reduce((n,p)=>n+p.length,0),out=new Uint8Array(len);let o=0;
+  for(const p of parts){out.set(p,o);o+=p.length;}return out;
+}
+function uintBytes(value,minBytes=1){
+  let v=BigInt(Math.max(0,Math.floor(Number(value)||0))),len=minBytes;
+  while(v >= (1n<<BigInt(8*len)))len++;
+  const out=new Uint8Array(len);
+  for(let i=len-1;i>=0;i--){out[i]=Number(v&255n);v>>=8n;}
+  return out;
+}
+function float64Bytes(value){const b=new ArrayBuffer(8),d=new DataView(b);d.setFloat64(0,Number(value),false);return new Uint8Array(b);}
+function strBytes(s){return new TextEncoder().encode(String(s));}
+function ebmlSize(value){
+  let v=BigInt(value),len=1;
+  while(len<8 && v >= ((1n<<BigInt(7*len))-1n))len++;
+  const out=new Uint8Array(len);let x=v;
+  for(let i=len-1;i>=0;i--){out[i]=Number(x&255n);x>>=8n;}
+  out[0]|=1<<(8-len);return out;
+}
+function ebmlEl(id,data){return concatU8([new Uint8Array(id),ebmlSize(data.length),data]);}
+function makeSimpleBlock(chunk,clusterMs){
+  const tMs=Math.round(chunk.timestamp/1000),rel=clamp(tMs-clusterMs,-32768,32767);
+  const hdr=new Uint8Array([0x81,(rel>>8)&255,rel&255,chunk.type==='key'?0x80:0x00]);
+  const size=hdr.length+chunk.data.length;
+  return new Blob([new Uint8Array([0xA3]),ebmlSize(size),hdr,chunk.data]);
+}
+function muxVP8WebM(chunks,width,height,fps,durationSec){
+  const EBML=ebmlEl([0x1A,0x45,0xDF,0xA3],concatU8([
+    ebmlEl([0x42,0x86],uintBytes(1)),ebmlEl([0x42,0xF7],uintBytes(1)),
+    ebmlEl([0x42,0xF2],uintBytes(4)),ebmlEl([0x42,0xF3],uintBytes(8)),
+    ebmlEl([0x42,0x82],strBytes('webm')),ebmlEl([0x42,0x87],uintBytes(4)),ebmlEl([0x42,0x85],uintBytes(2))
+  ]));
+  const info=ebmlEl([0x15,0x49,0xA9,0x66],concatU8([
+    ebmlEl([0x2A,0xD7,0xB1],uintBytes(1000000)),
+    ebmlEl([0x44,0x89],float64Bytes(durationSec*1000)),
+    ebmlEl([0x4D,0x80],strBytes('7 Video Stage HQ')),
+    ebmlEl([0x57,0x41],strBytes('7 Video Stage HQ'))
+  ]));
+  const video=ebmlEl([0xE0],concatU8([ebmlEl([0xB0],uintBytes(width)),ebmlEl([0xBA],uintBytes(height))]));
+  const track=ebmlEl([0xAE],concatU8([
+    ebmlEl([0xD7],uintBytes(1)),ebmlEl([0x73,0xC5],uintBytes(1)),ebmlEl([0x83],uintBytes(1)),
+    ebmlEl([0x86],strBytes('V_VP8')),ebmlEl([0x23,0xE3,0x83],uintBytes(Math.round(1e9/fps),4)),video
+  ]));
+  const tracks=ebmlEl([0x16,0x54,0xAE,0x6B],track);
+  const sorted=[...chunks].sort((a,b)=>a.timestamp-b.timestamp),clusters=[];
+  let clusterStart=null,blocks=[];
+  const flush=()=>{
+    if(clusterStart===null||!blocks.length)return;
+    const tc=ebmlEl([0xE7],uintBytes(clusterStart));
+    const bodySize=tc.length+blocks.reduce((n,b)=>n+b.size,0);
+    clusters.push(new Blob([new Uint8Array([0x1F,0x43,0xB6,0x75]),ebmlSize(bodySize),tc,...blocks]));
+    blocks=[];
+  };
+  for(const c of sorted){
+    const ms=Math.round(c.timestamp/1000);
+    if(clusterStart===null)clusterStart=ms;
+    const rel=ms-clusterStart;
+    if((c.type==='key'&&blocks.length&&rel>=1000)||rel>30000){flush();clusterStart=ms;}
+    blocks.push(makeSimpleBlock(c,clusterStart));
+  }
+  flush();
+  const segSize=info.length+tracks.length+clusters.reduce((n,b)=>n+b.size,0);
+  return new Blob([EBML,new Uint8Array([0x18,0x53,0x80,0x67]),ebmlSize(segSize),info,tracks,...clusters],{type:'video/webm'});
+}
+function seekVideoTo(v,t,timeout=12000){
+  return new Promise((resolve,reject)=>{
+    if(renderAbort){reject(new DOMException('中止','AbortError'));return;}
+    const target=Math.max(0,Math.min(t,Math.max(0,(Number.isFinite(v.duration)?v.duration:0)-0.001)));
+    if(Math.abs((v.currentTime||0)-target)<0.012&&v.readyState>=2){resolve();return;}
+    let done=false;
+    const cleanup=()=>{clearInterval(ab);clearTimeout(tm);v.removeEventListener('seeked',ok);v.removeEventListener('error',bad);};
+    const ok=()=>{if(done)return;done=true;cleanup();resolve();};
+    const bad=()=>{if(done)return;done=true;cleanup();reject(new Error('動画のフレーム取得に失敗しました'));};
+    const ab=setInterval(()=>{if(renderAbort&&!done){done=true;cleanup();reject(new DOMException('中止','AbortError'));}},60);
+    const tm=setTimeout(()=>{if(!done){done=true;cleanup();reject(new Error('動画のシークがタイムアウトしました'));}},timeout);
+    v.addEventListener('seeked',ok,{once:true});v.addEventListener('error',bad,{once:true});
+    try{v.currentTime=target;}catch(e){cleanup();reject(e);}
+  });
+}
+async function snapshotTile(video,px){
+  const tw=Math.max(2,Math.round(px.w)),th=Math.max(2,Math.round(px.h));
+  const c=document.createElement('canvas');c.width=tw;c.height=th;
+  const x=c.getContext('2d',{alpha:false,desynchronized:true});x.fillStyle='#000';x.fillRect(0,0,tw,th);
+  drawFit(x,video,0,0,tw,th,fitMode);
+  return await createImageBitmap(c);
+}
+async function loadHQVideo(url){
+  const v=document.createElement('video');activeHQVideo=v;
+  v.src=url;v.preload='auto';v.muted=true;v.playsInline=true;v.setAttribute('playsinline','');
+  try{v.disableRemotePlayback=true;}catch(_){}
+  if(v.readyState<1)await waitEvent(v,'loadedmetadata',15000);
+  if(v.readyState<2){try{await waitEvent(v,'loadeddata',15000);}catch(_){} }
+  return v;
+}
+function closeHQVideo(v){
+  if(!v)return;try{v.pause();v.removeAttribute('src');v.load();}catch(_){}if(activeHQVideo===v)activeHQVideo=null;
+}
+async function captureHQSourceFrames(item,times,px,url,endCache){
+  const frames=new Array(times.length).fill(null);
+  if(!times.length)return frames;
+  const lastValid=Math.max(0,item.duration-0.001);
+  const need=times.map((t,i)=>t<item.duration?i:-1).filter(i=>i>=0);
+  if(need.length){
+    const v=await loadHQVideo(url);
+    try{
+      for(const i of need){
+        if(renderAbort)throw new DOMException('中止','AbortError');
+        await seekVideoTo(v,Math.min(times[i],lastValid));
+        frames[i]=await snapshotTile(v,px);
+      }
+      if(times.some(t=>t>=item.duration) && !endCache.bitmap){
+        await seekVideoTo(v,lastValid);endCache.bitmap=await snapshotTile(v,px);
+      }
+    }finally{closeHQVideo(v);}
+  }else if(!endCache.bitmap){
+    const v=await loadHQVideo(url);try{await seekVideoTo(v,lastValid);endCache.bitmap=await snapshotTile(v,px);}finally{closeHQVideo(v);}
+  }
+  for(let i=0;i<times.length;i++)if(!frames[i]&&times[i]>=item.duration)frames[i]=endCache.bitmap;
+  return frames;
+}
+function hqChunkFrames(layout,width,height,fps){
+  const sumArea=layout.reduce((n,p)=>n+Math.max(1,p.w/100*width)*Math.max(1,p.h/100*height),0);
+  const targetBytes=48*1024*1024;
+  return clamp(Math.floor(targetBytes/Math.max(1,sumArea*4)),1,Math.max(1,Math.min(12,fps)));
+}
+async function renderHighQuality({items,duration,fps,width,height,bitrate}){
+  const config=await pickHQEncoderConfig(width,height,fps,bitrate);
+  if(!config)throw new Error('この端末では高画質モード用のVP8 WebCodecsエンコーダーを利用できません。互換モードを試してください');
+  const layout=captureLayout();
+  const layoutPx=layout.map(p=>({x:p.x/100*width,y:p.y/100*height,w:p.w/100*width,h:p.h/100*height}));
+  renderCanvas.width=width;renderCanvas.height=height;
+  const ctx=renderCanvas.getContext('2d',{alpha:false,desynchronized:true});
+  const totalFrames=Math.max(1,Math.ceil(duration*fps)),frameDurUs=Math.round(1e6/fps);
+  const chunkFrames=hqChunkFrames(items.map(x=>layout[x.i]),width,height,fps);
+  const encoded=[];let encoderError=null;
+  const encoder=new VideoEncoder({
+    output(chunk){const data=new Uint8Array(chunk.byteLength);chunk.copyTo(data);encoded.push({timestamp:chunk.timestamp,duration:chunk.duration,type:chunk.type,data});},
+    error(e){encoderError=e;}
+  });
+  activeHQEncoder=encoder;encoder.configure(config);
+  const urls=new Map(items.map(x=>[x.i,URL.createObjectURL(x.file)]));
+  const endCache=new Map(items.map(x=>[x.i,{bitmap:null}]));
+  const started=performance.now();
+  try{
+    for(let base=0;base<totalFrames;base+=chunkFrames){
+      if(renderAbort)throw new DOMException('中止','AbortError');
+      const count=Math.min(chunkFrames,totalFrames-base);
+      const times=Array.from({length:count},(_,j)=>(base+j)/fps);
+      const sourceFrames=new Map();
+      for(let si=0;si<items.length;si++){
+        if(renderAbort)throw new DOMException('中止','AbortError');
+        const item=items[si],px=layoutPx[item.i];
+        renderStatus.textContent=`高画質フレーム取得：GROUP ${item.i+1}`;
+        const overall=(base+(si/items.length)*count)/totalFrames;
+        renderProgress.value=Math.min(.97,overall);
+        renderDetails.textContent=`${fmt(times[0])}〜${fmt(times[times.length-1]+1/fps)} / ${fmt(duration)}　元動画を1本ずつ処理中　（中止できます）`;
+        sourceFrames.set(item.i,await captureHQSourceFrames(item,times,px,urls.get(item.i),endCache.get(item.i)));
+        await sleep(0);
+      }
+      for(let j=0;j<count;j++){
+        if(renderAbort)throw new DOMException('中止','AbortError');
+        ctx.fillStyle='#000';ctx.fillRect(0,0,width,height);
+        for(const item of items){
+          const bm=sourceFrames.get(item.i)[j],p=layoutPx[item.i];
+          if(bm)ctx.drawImage(bm,p.x,p.y,p.w,p.h);
+        }
+        const frameIndex=base+j,ts=Math.round(frameIndex*1e6/fps);
+        const vf=new VideoFrame(renderCanvas,{timestamp:ts,duration:frameDurUs});
+        encoder.encode(vf,{keyFrame:frameIndex%(fps*2)===0});vf.close();
+        if(encoder.encodeQueueSize>6)await new Promise(r=>setTimeout(r,0));
+        renderProgress.value=Math.min(.99,(frameIndex+1)/totalFrames);
+        renderStatus.textContent='高画質エンコード中…';
+        const elapsed=(performance.now()-started)/1000;
+        renderDetails.textContent=`${fmt((frameIndex+1)/fps)} / ${fmt(duration)}　${Math.floor((frameIndex+1)/totalFrames*100)}%　経過 ${fmt(elapsed)}　（中止できます）`;
+      }
+      // この区間で作った一時ビットマップを解放（末尾固定用キャッシュだけ残す）
+      const persistent=new Set([...endCache.values()].map(x=>x.bitmap).filter(Boolean));
+      for(const arr of sourceFrames.values())for(const bm of new Set(arr.filter(Boolean)))if(!persistent.has(bm))try{bm.close();}catch(_){}
+      await sleep(0);
+    }
+    if(renderAbort)throw new DOMException('中止','AbortError');
+    await encoder.flush();if(encoderError)throw encoderError;
+    encoder.close();activeHQEncoder=null;
+    return muxVP8WebM(encoded,width,height,fps,totalFrames/fps);
+  }finally{
+    if(activeHQEncoder){try{activeHQEncoder.reset();activeHQEncoder.close();}catch(_){}activeHQEncoder=null;}
+    closeHQVideo(activeHQVideo);
+    for(const u of urls.values())URL.revokeObjectURL(u);
+    for(const c of endCache.values())if(c.bitmap)try{c.bitmap.close();}catch(_){}
+  }
+}
+function clearRenderResult(){
+  if(renderResultUrl){URL.revokeObjectURL(renderResultUrl);renderResultUrl=null;}
+  renderResultVideo.pause();renderResultVideo.removeAttribute('src');renderResultVideo.load();renderDownload.removeAttribute('href');renderResult.hidden=true;
+}
+function renderFilename(ext){
+  const d=new Date(),pad=n=>String(n).padStart(2,'0');
+  return `7groups_${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}_${pad(d.getHours())}${pad(d.getMinutes())}.${ext}`;
+}
+async function startRender(){
+  if(rendering)return;
+  const mode=renderMode.value;
+  if(mode==='compat'&&!canRender()){renderStatus.textContent='このブラウザは互換レンダリングに対応していません。';return;}
+  if(mode==='hq'&&!canHQRender()){renderStatus.textContent='このブラウザは高画質レンダリングに対応していません。互換モードを選んでください。';return;}
+  const items=slots.map((s,i)=>s.file&&s.video&&Number.isFinite(s.video.duration)?{i,file:s.file,duration:s.video.duration}:null).filter(Boolean);
+  if(!items.length){renderStatus.textContent='先に動画を選択してください。';return;}
+  clearRenderResult();
+  const maxDuration=Math.max(...items.map(x=>x.duration));
+  const limit=renderLength.value==='all'?maxDuration:Math.min(maxDuration,Number(renderLength.value));
+  if(!Number.isFinite(limit)||limit<=0){renderStatus.textContent='動画の長さを取得できません。';return;}
+  const {w,h}=renderDimensions(renderSize.value),fps=Number(renderFps.value),recType=chooseRecorderType();
+  const bitrate=Math.round((w>=1080?18:w>=720?10:6)*1_000_000);
+  const restore=slots.map(s=>s.file);
+  rendering=true;renderAbort=false;renderPanel.classList.add('running');renderStart.disabled=true;renderCancel.disabled=false;renderProgress.value=0;
+  renderStatus.textContent='レンダリング準備中…';
+  renderDetails.textContent=mode==='hq'
+    ?`${w}×${h} / ${fps}fps / ${fmt(limit)} / 高画質1回圧縮 / VP8 WebM`
+    :`${w}×${h} / ${fps}fps / ${fmt(limit)} / ${items.length}段合成 / ${recType.mime||'自動形式'}`;
+  try{wakeLock=await navigator.wakeLock?.request?.('screen');}catch(_){}
+  slots.forEach(cleanupSlot);updateCount();
+  let composite=null;
+  try{
+    if(mode==='hq'){
+      composite=await renderHighQuality({items,duration:limit,fps,width:w,height:h,bitrate});
+    }else{
+      const compatBitrate=Math.round((w>=1080?12:w>=720?7:4)*1_000_000);
+      for(let p=0;p<items.length;p++){
+        if(renderAbort)throw new DOMException('中止','AbortError');
+        composite=await recordPass({baseBlob:composite,sourceFile:items[p].file,slotIndex:items[p].i,duration:limit,fps,width:w,height:h,pass:p,totalPasses:items.length,recType,bitrate:compatBitrate});
+        await sleep(80);
+      }
+    }
+    if(renderAbort)throw new DOMException('中止','AbortError');
+    renderProgress.value=1;renderStatus.textContent='✓ レンダリング完了';
+    const measured=await probeBlobDuration(composite);
+    const durationNote=Number.isFinite(measured)?` / 実測 ${measured.toFixed(2)}秒`:' / 実測時間を取得できません';
+    const mismatch=Number.isFinite(measured)&&Math.abs(measured-limit)>1.25;
+    renderDetails.textContent=`完成: ${w}×${h} / ${fps}fps / ${mode==='hq'?'高画質・1回圧縮':'互換・多段圧縮'} / 目標 ${limit.toFixed(2)}秒${durationNote} / ${(composite.size/1024/1024).toFixed(1)} MB${mismatch?' ⚠ 時間情報にずれがあります':''}`;
+    const actualExt=(composite.type||'').includes('mp4')?'mp4':'webm';
+    renderResultUrl=URL.createObjectURL(composite);renderResultVideo.src=renderResultUrl;renderDownload.href=renderResultUrl;renderDownload.download=renderFilename(actualExt);renderResult.hidden=false;
+  }catch(e){
+    if(e?.name==='AbortError'||renderAbort){renderStatus.textContent='■ レンダリングを中止しました';renderDetails.textContent='途中まで作成したデータは破棄しました。';renderProgress.value=0;}
+    else{console.error(e);renderStatus.textContent='⚠ レンダリングに失敗しました';renderDetails.textContent=`${e?.message||e}。解像度/FPSを下げるか、10秒テスト、または互換モードで確認してください。`;}
+  }finally{
+    stopActiveRenderMedia();closeHQVideo(activeHQVideo);activeRecorder=null;rendering=false;renderAbort=false;renderPanel.classList.remove('running');renderStart.disabled=false;renderCancel.disabled=true;
+    try{await wakeLock?.release?.();}catch(_){}wakeLock=null;
+    restore.forEach((f,i)=>{if(f)setFile(i,f);});
+  }
+}
+function cancelRender(){
+  if(!rendering)return;renderAbort=true;renderStatus.textContent='中止処理中…';renderCancel.disabled=true;
+  activeRenderVideos.forEach(v=>{try{v.pause();}catch(_){}});
+  if(activeRecorder&&activeRecorder.state!=='inactive'){try{activeRecorder.stop();}catch(_){}}
+  stopActiveRenderMedia();
+  closeHQVideo(activeHQVideo);
+  if(activeHQEncoder){try{activeHQEncoder.reset();activeHQEncoder.close();}catch(_){}activeHQEncoder=null;}
+}
+renderToggle.addEventListener('click',()=>{renderPanel.classList.toggle('open');renderToggle.classList.toggle('active',renderPanel.classList.contains('open'));});
+renderStart.addEventListener('click',startRender);renderCancel.addEventListener('click',cancelRender);renderDiscard.addEventListener('click',()=>{clearRenderResult();renderStatus.textContent='待機中';renderDetails.textContent='高画質モードは元動画を1本ずつ読み、短い区間ごとに7枠を合成して最後に1回だけVP8/WebMへ圧縮します。音声は出力しません。';renderProgress.value=0;});
+function updateRenderCompat(){
+  const hq=canHQRender()?'高画質: 利用可能':'高画質: 非対応';
+  const compat=canRender()?`互換: ${chooseRecorderType().mime||'自動形式'}`:'互換: 非対応';
+  renderCompat.textContent=`${hq} / ${compat}`;
+  if(renderMode.value==='hq'&&!canHQRender())renderMode.value='compat';
+}
+renderMode.addEventListener('change',updateRenderCompat);updateRenderCompat();
+
+async function enterProject(){
+  editing=false;stage.classList.remove('editing');editBtn.classList.remove('active');editBtn.textContent='✥ 配置編集 OFF';document.body.classList.add('projecting');
+  try{if(document.documentElement.requestFullscreen)await document.documentElement.requestFullscreen();}catch(_){}
+}
+async function exitProject(){
+  document.body.classList.remove('projecting');try{if(document.fullscreenElement&&document.exitFullscreen)await document.exitFullscreen();}catch(_){}
+}
+projectBtn.addEventListener('click',()=>{if(!rendering)enterProject();});projectExit.addEventListener('click',exitProject);
+document.addEventListener('fullscreenchange',()=>{if(!document.fullscreenElement)document.body.classList.remove('projecting');});
+window.addEventListener('pagehide',()=>{renderAbort=true;try{if(activeRecorder&&activeRecorder.state!=='inactive')activeRecorder.stop();}catch(_){}try{if(activeHQEncoder){activeHQEncoder.reset();activeHQEncoder.close();}}catch(_){}activeHQEncoder=null;closeHQVideo(activeHQVideo);stopActiveRenderMedia();clearRenderResult();slots.forEach(cleanupSlot);},{once:true});
+})();
+</script>
+</body>
+</html>
