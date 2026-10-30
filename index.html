@@ -31,6 +31,17 @@ input[type=file]{display:none}
 .notice{padding:11px 12px;border-radius:10px;background:#2f251a;color:#ffdea5;font-size:12px;line-height:1.6}
 footer{color:#8293aa;text-align:center;padding:22px;font-size:12px}
 @media(max-width:820px){.twoCol{grid-template-columns:1fr}.homeGrid{grid-template-columns:1fr}.homeTile{min-height:135px;padding:20px}.wrap{padding:12px}.card{padding:11px}.topbar h1{font-size:14px}}
+
+/* BeReal advanced inset editor; only the editing overlay has handles. */
+.advancedEditor{border:1px solid #45648a;background:#101f32;border-radius:12px;padding:12px;display:flex;flex-direction:column;gap:11px}
+.advancedEditor h3{margin:0;font-size:16px}
+.advancedGrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.advancedEditor .field{margin:0}
+.advancedEditor .field input[type=number]{width:100%;min-width:0;min-height:42px;border-radius:9px;background:#111824;color:var(--text);border:1px solid var(--line);padding:8px}
+.advancedEditor .row button{flex:1;min-width:120px;font-size:13px}
+.advancedHelp{font-size:12px;line-height:1.65;color:#c8d9ed}
+.modeOn{border-color:#80b6ff!important;background:#184679!important;color:#fff!important}
+@media(max-width:480px){.advancedGrid{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
@@ -47,9 +58,9 @@ footer{color:#8293aa;text-align:center;padding:22px;font-size:12px}
 <section class="screen" id="berealScreen">
 <header class="topbar"><button class="backHome">← トップページに戻る</button><h1>BeReal風画像作成</h1></header>
 <div class="wrap">
-<div class="toolbar"><button id="newBereal" class="primary">＋ 新しい画像を作る</button><span id="bStep" class="step">準備中</span></div>
+<div class="toolbar"><button id="newBereal" class="primary">＋ 新しい画像を作る</button><button id="bAdvanceToggle" type="button" aria-pressed="false">⚙ Advanceモード OFF</button><span id="bStep" class="step">準備中</span></div>
 <div class="twoCol">
- <div><div class="canvasFrame" id="bFrame"><canvas id="bCanvas" width="1180" height="820"></canvas></div><div class="stageDesc">編集中の写真は指でドラッグして位置を調整。拡大率は右のスライダーから変更できます。左上の小窓の位置・大きさは固定です。完成画像は2360×1640ピクセルで保存します。</div></div>
+ <div><div class="canvasFrame" id="bFrame"><canvas id="bCanvas" width="1180" height="820"></canvas></div><div class="stageDesc">編集中の写真は指でドラッグして位置を調整。写真の拡大率は右のスライダーで変更できます。通常モードでは左上の小窓は固定、Advanceモードでは小窓の位置・大きさ・縦横比も調整できます。完成画像は2360×1640ピクセルです。</div></div>
  <div class="card stack">
   <div id="bIntro"><h3>画像を作成</h3><p>「新しい画像を作る」を押してください。最初にメイン画像、次にインカメラ画像を選択します。</p></div>
   <div id="bControls" class="hidden">
@@ -58,6 +69,30 @@ footer{color:#8293aa;text-align:center;padding:22px;font-size:12px}
    <div class="field"><label for="bZoom">拡大率 <span id="bZoomText">1.00×</span></label><input id="bZoom" type="range" min="1" max="4" step="0.01" value="1"></div>
    <div class="row"><button id="bResetPosition">位置と拡大率をリセット</button></div>
    <div class="row"><button id="bPrev" class="hidden">← 前へ</button><button id="bNext" class="primary">次へ →</button></div>
+  </div>
+  <div id="bAdvancedPanel" class="advancedEditor hidden">
+    <h3>⚙ インカメラ小窓の詳細設定</h3>
+    <div class="advancedHelp">小窓の枠自体を編集できます。小窓を指で動かす場合は「枠を移動」を選択してください。右下の青い丸を動かすと縦横比を保って大きさを変えられます。小窓内の写真の切り取り位置も別に調整できます。</div>
+    <div class="row"><button type="button" id="bMoveFrame" class="modeOn">▣ 枠を移動</button><button type="button" id="bMovePhoto">✥ 枠内の写真を移動</button></div>
+    <div class="field"><label for="bRatio">小窓のアスペクト比（幅 : 高さ）</label>
+      <select id="bRatio">
+        <option value="original">標準（従来と同じ比率）</option>
+        <option value="9:16">9:16（縦長）</option><option value="3:4">3:4（縦長）</option>
+        <option value="1:1">1:1（正方形）</option><option value="4:3">4:3（横長）</option>
+        <option value="16:9">16:9（横長）</option><option value="custom">自由設定</option>
+      </select>
+    </div>
+    <div class="advancedGrid hidden" id="bCustomRatio">
+      <div class="field"><label for="bRatioW">幅の比率</label><input type="number" id="bRatioW" min="1" max="50" value="4" step="1"></div>
+      <div class="field"><label for="bRatioH">高さの比率</label><input type="number" id="bRatioH" min="1" max="50" value="5" step="1"></div>
+    </div>
+    <div class="field"><label for="bInsetWidth">小窓の幅　<span id="bInsetWidthText">23.5%</span></label><input type="range" id="bInsetWidth" min="9" max="70" step="0.5" value="23.5"></div>
+    <div class="advancedGrid">
+      <div class="field"><label for="bInsetX">左右位置（左端から） <span id="bInsetXText">3.8%</span></label><input type="range" id="bInsetX" min="0" max="100" step="0.5" value="3.8"></div>
+      <div class="field"><label for="bInsetY">上下位置（上端から） <span id="bInsetYText">5.1%</span></label><input type="range" id="bInsetY" min="0" max="100" step="0.5" value="5.1"></div>
+    </div>
+    <div class="row"><button type="button" id="bInsetReset">↺ 小窓の位置・大きさ・比率を初期化</button></div>
+    <div class="advancedHelp">※ 通常モードに戻すと小窓は元の固定レイアウトで出力されます。Advance設定は切り替え中も保持されます。拡大しすぎて画面からはみ出す場合は、自動的に範囲内へ調整します。</div>
   </div>
   <div id="bSavePanel" class="hidden"><hr class="hr"><h3>完成画像を保存</h3><div class="field"><label for="bFilename">ファイル名</label><input type="text" id="bFilename" value="BeReal風_画像" maxlength="100"></div><div class="row"><button id="bExport" class="primary">⬇ 画像を保存（PNG）</button></div><div id="bSaveStatus" class="status"></div><p class="subtext">2360×1640ピクセルのPNGをiPadの「ファイル」に保存できます。写真アプリに入れる場合は、保存した画像を共有メニューから追加してください。</p></div>
  </div>
@@ -131,13 +166,71 @@ function canPlayUrl(url,v){return new Promise((resolve,reject)=>{let done=false;
 // ------------------- BeReal風: locally composited PNG -------------------
 const bCanvas=$('bCanvas'),bCtx=bCanvas.getContext('2d'),bImages=[null,null];
 const bViews=[{zoom:1,dx:0,dy:0},{zoom:1,dx:0,dy:0}];
-let bPhase=-1,bDrag=null;
-function bInset(W,H){return{x:W*.038,y:H*.051,w:W*.235,h:H*.39};}
+let bPhase=-1,bDrag=null,bAdvanced=false,bTouchTarget='frame';
+const B_DEFAULT={x:.038,y:.051,w:.235,ratio:(IPAD_NATIVE_W*.235)/(IPAD_NATIVE_H*.39)};
+let bLayout={...B_DEFAULT};
+let bRatioPreset='original';
+function bRatioValue(){
+ if(bRatioPreset==='original')return B_DEFAULT.ratio;
+ if(bRatioPreset==='custom'){
+  const a=Math.max(1,Math.min(50,Number($('bRatioW').value)||4));
+  const b=Math.max(1,Math.min(50,Number($('bRatioH').value)||5));
+  return a/b;
+ }
+ const [a,b]=bRatioPreset.split(':').map(Number);return a/b;
+}
+function bNormalizeLayout(){
+ bLayout.ratio=bRatioValue();
+ // Limit inset height to 94% of canvas. Width may be reduced for tall ratios.
+ const maxW=Math.min(.70,.94*(IPAD_NATIVE_H/IPAD_NATIVE_W)*bLayout.ratio);
+ bLayout.w=Math.min(maxW,Math.max(.05,Number(bLayout.w)||.235));
+ const h=(IPAD_NATIVE_W/IPAD_NATIVE_H)*bLayout.w/bLayout.ratio;
+ bLayout.x=Math.max(0,Math.min(1-bLayout.w,Number(bLayout.x)||0));
+ bLayout.y=Math.max(0,Math.min(1-h,Number(bLayout.y)||0));
+}
+function bInset(W,H){
+ if(!bAdvanced)return{x:W*.038,y:H*.051,w:W*.235,h:H*.39};
+ bNormalizeLayout();
+ return{x:W*bLayout.x,y:H*bLayout.y,w:W*bLayout.w,h:W*bLayout.w/bLayout.ratio};
+}
+function bSyncAdvanced(){
+ const shown=bAdvanced&&bPhase>=1;
+ $('bAdvancedPanel').classList.toggle('hidden',!shown);
+ $('bAdvanceToggle').textContent=bAdvanced?'⚙ Advanceモード ON':'⚙ Advanceモード OFF';
+ $('bAdvanceToggle').classList.toggle('modeOn',bAdvanced);
+ $('bAdvanceToggle').setAttribute('aria-pressed',String(bAdvanced));
+ if(!shown)return;
+ bNormalizeLayout();
+ $('bRatio').value=bRatioPreset;
+ $('bCustomRatio').classList.toggle('hidden',bRatioPreset!=='custom');
+ $('bInsetWidth').value=(bLayout.w*100).toFixed(2);
+ $('bInsetX').max=((1-bLayout.w)*100).toFixed(2);
+ $('bInsetY').max=((1-(IPAD_NATIVE_W/IPAD_NATIVE_H)*bLayout.w/bLayout.ratio)*100).toFixed(2);
+ $('bInsetX').value=(bLayout.x*100).toFixed(2);
+ $('bInsetY').value=(bLayout.y*100).toFixed(2);
+ $('bInsetWidthText').textContent=(bLayout.w*100).toFixed(1)+'%';
+ $('bInsetXText').textContent=(bLayout.x*100).toFixed(1)+'%';
+ $('bInsetYText').textContent=(bLayout.y*100).toFixed(1)+'%';
+ $('bMoveFrame').classList.toggle('modeOn',bTouchTarget==='frame');
+ $('bMovePhoto').classList.toggle('modeOn',bTouchTarget==='photo');
+}
 function bDrawTo(ctx,W,H,showHints=false){
  ctx.fillStyle='#141a24';ctx.fillRect(0,0,W,H);
  if(bImages[0])cover(ctx,bImages[0],{x:0,y:0,w:W,h:H},bViews[0].zoom,bViews[0].dx,bViews[0].dy);
  else if(showHints){ctx.fillStyle='#a9bbcf';ctx.textAlign='center';ctx.font=`bold ${W*.026}px sans-serif`;ctx.fillText('メイン画像を選んでください',W/2,H/2);}
- if(bImages[1] || bPhase>=1){const r=bInset(W,H);ctx.save();ctx.shadowColor='rgba(0,0,0,.65)';ctx.shadowBlur=W*.012;ctx.fillStyle='#fff';pathRoundRect(ctx,r.x-5*W/2048,r.y-5*W/2048,r.w+10*W/2048,r.h+10*W/2048,W*.01);ctx.fill();ctx.restore();ctx.save();pathRoundRect(ctx,r.x,r.y,r.w,r.h,W*.008);ctx.clip();ctx.fillStyle='#252e3f';ctx.fillRect(r.x,r.y,r.w,r.h);if(bImages[1])cover(ctx,bImages[1],r,bViews[1].zoom,bViews[1].dx,bViews[1].dy);ctx.restore();}
+ if(bImages[1] || bPhase>=1){
+  const r=bInset(W,H);
+  ctx.save();ctx.shadowColor='rgba(0,0,0,.65)';ctx.shadowBlur=W*.012;
+  ctx.fillStyle='#fff';pathRoundRect(ctx,r.x-5*W/2048,r.y-5*W/2048,r.w+10*W/2048,r.h+10*W/2048,W*.01);ctx.fill();ctx.restore();
+  ctx.save();pathRoundRect(ctx,r.x,r.y,r.w,r.h,W*.008);ctx.clip();ctx.fillStyle='#252e3f';ctx.fillRect(r.x,r.y,r.w,r.h);
+  if(bImages[1])cover(ctx,bImages[1],r,bViews[1].zoom,bViews[1].dx,bViews[1].dy);ctx.restore();
+  if(showHints && bAdvanced && bPhase>=1){
+   ctx.save();ctx.strokeStyle='#64c9ff';ctx.lineWidth=Math.max(2,W*.003);ctx.setLineDash([W*.009,W*.005]);
+   ctx.strokeRect(r.x,r.y,r.w,r.h);ctx.setLineDash([]);
+   const grip=Math.max(W*.021,14);ctx.beginPath();ctx.arc(r.x+r.w,r.y+r.h,grip,0,Math.PI*2);
+   ctx.fillStyle='#1172d2';ctx.fill();ctx.strokeStyle='#fff';ctx.lineWidth=Math.max(1,W*.002);ctx.stroke();ctx.restore();
+  }
+ }
 }
 function drawB(){bDrawTo(bCtx,bCanvas.width,bCanvas.height,true);}
 function bShowStep(){
@@ -151,21 +244,72 @@ function bShowStep(){
  $('bRechoose').classList.toggle('hidden',bPhase===2);
  $('bSavePanel').classList.toggle('hidden',bPhase!==2);
  $('bNext').disabled=!bImages[bPhase];
- drawB();
+ bSyncAdvanced();drawB();
 }
-$('newBereal').onclick=()=>{bImages[0]=null;bImages[1]=null;bViews.forEach(x=>Object.assign(x,{zoom:1,dx:0,dy:0}));bPhase=0;$('bSaveStatus').textContent='';bShowStep();$('bFile').click();};
+$('bAdvanceToggle').onclick=()=>{bAdvanced=!bAdvanced;bTouchTarget='frame';bSyncAdvanced();drawB();};
+$('bRatio').onchange=e=>{bRatioPreset=e.target.value;bSyncAdvanced();drawB();};
+for(const id of ['bRatioW','bRatioH'])$(id).oninput=()=>{if(bRatioPreset==='custom'){bSyncAdvanced();drawB();}};
+$('bInsetWidth').oninput=e=>{bLayout.w=Number(e.target.value)/100;bSyncAdvanced();drawB();};
+$('bInsetX').oninput=e=>{bLayout.x=Number(e.target.value)/100;bSyncAdvanced();drawB();};
+$('bInsetY').oninput=e=>{bLayout.y=Number(e.target.value)/100;bSyncAdvanced();drawB();};
+$('bMoveFrame').onclick=()=>{bTouchTarget='frame';bSyncAdvanced();drawB();};
+$('bMovePhoto').onclick=()=>{bTouchTarget='photo';bSyncAdvanced();drawB();};
+$('bInsetReset').onclick=()=>{bLayout={...B_DEFAULT};bRatioPreset='original';bTouchTarget='frame';$('bRatioW').value='4';$('bRatioH').value='5';bSyncAdvanced();drawB();};
+$('newBereal').onclick=()=>{
+ bImages[0]=null;bImages[1]=null;bViews.forEach(x=>Object.assign(x,{zoom:1,dx:0,dy:0}));
+ bLayout={...B_DEFAULT};bRatioPreset='original';bTouchTarget='frame';$('bRatioW').value='4';$('bRatioH').value='5';
+ bPhase=0;$('bSaveStatus').textContent='';bShowStep();$('bFile').click();
+};
 $('bChoose').onclick=$('bRechoose').onclick=()=>$('bFile').click();
 $('bFile').onchange=async ev=>{const file=ev.target.files?.[0];resetInputs(ev.target);if(!file)return;if(!file.type.startsWith('image/')){alert('画像を選択してください');return;}
- try{const url=URL.createObjectURL(file),img=new Image();await new Promise((ok,fail)=>{img.onload=ok;img.onerror=()=>fail(Error('画像を開けません'));img.src=url});URL.revokeObjectURL(url);bImages[Math.min(bPhase,1)]=img;Object.assign(bViews[Math.min(bPhase,1)],{zoom:1,dx:0,dy:0});bShowStep();}catch(e){alert(e.message);}
+ let url=null;
+ try{url=URL.createObjectURL(file);const img=new Image();await new Promise((ok,fail)=>{img.onload=ok;img.onerror=()=>fail(Error('画像を開けません'));img.src=url});
+  bImages[Math.min(bPhase,1)]=img;Object.assign(bViews[Math.min(bPhase,1)],{zoom:1,dx:0,dy:0});bShowStep();
+ }catch(e){alert(e.message);}finally{if(url)URL.revokeObjectURL(url);}
 };
 $('bNext').onclick=()=>{if(bPhase===0&&!bImages[0])return;if(bPhase===1&&!bImages[1])return;bPhase++;bShowStep();if(bPhase===1)$('bFile').click();};
 $('bPrev').onclick=()=>{bPhase=Math.max(0,bPhase-1);bShowStep();};
-$('bZoom').oninput=e=>{let v=bViews[Math.min(bPhase,1)];v.zoom=Number(e.target.value);$('bZoomText').textContent=v.zoom.toFixed(2)+'×';drawB();};
+$('bZoom').oninput=e=>{const v=bViews[Math.min(bPhase,1)];v.zoom=Number(e.target.value);$('bZoomText').textContent=v.zoom.toFixed(2)+'×';drawB();};
 $('bResetPosition').onclick=()=>{Object.assign(bViews[Math.min(bPhase,1)],{zoom:1,dx:0,dy:0});bShowStep();};
-$('bFrame').onpointerdown=e=>{if(bPhase<0||bPhase>1||!bImages[bPhase])return;e.preventDefault();bDrag={x:e.clientX,y:e.clientY,dx:bViews[bPhase].dx,dy:bViews[bPhase].dy,ix:bPhase};bCanvas.setPointerCapture(e.pointerId);};
-$('bFrame').onpointermove=e=>{if(!bDrag)return;e.preventDefault();const r=bCanvas.getBoundingClientRect(),rect=bDrag.ix===0?{w:r.width,h:r.height}:{w:r.width*.235,h:r.height*.39};const p=bViews[bDrag.ix];p.dx=bDrag.dx+(e.clientX-bDrag.x)/rect.w;p.dy=bDrag.dy+(e.clientY-bDrag.y)/rect.h;drawB();};
-function bStopDrag(){bDrag=null;}$('bFrame').onpointerup=bStopDrag;$('bFrame').onpointercancel=bStopDrag;
-$('bExport').onclick=async()=>{if(!bImages[0]||!bImages[1])return;const b=$('bExport');b.disabled=true;$('bSaveStatus').textContent='画像を生成中…';try{const w=IPAD_NATIVE_W,h=IPAD_NATIVE_H,canvas=document.createElement('canvas');canvas.width=w;canvas.height=h;bDrawTo(canvas.getContext('2d'),w,h);const blob=await blobOfCanvas(canvas);downloadBlob(blob,safeName($('bFilename').value)+'.png');$('bSaveStatus').textContent=`保存を開始しました（${w}×${h} PNG）`; }catch(e){$('bSaveStatus').textContent=e.message;}finally{b.disabled=false;}};
+$('bFrame').onpointerdown=e=>{
+ if(!bImages[0] || bPhase<0)return;
+ const rect=bCanvas.getBoundingClientRect();
+ const xx=e.clientX-rect.left,yy=e.clientY-rect.top;
+ let type='photo',ix=bPhase===0?0:1;
+ if(bPhase>=1){
+  const r=bInset(rect.width,rect.height);
+  const hit=xx>=r.x && xx<=r.x+r.w && yy>=r.y && yy<=r.y+r.h;
+  const nearCorner=Math.hypot(xx-(r.x+r.w),yy-(r.y+r.h))<=Math.max(27,rect.width*.035);
+  if(bAdvanced&&bTouchTarget==='frame'){
+   if(!hit&&!nearCorner)return;
+   type=nearCorner?'resize':'frame';
+  }else if(bAdvanced&&!hit)return;
+  if(!bAdvanced&&!bImages[1])return;
+ }
+ if(type==='photo'&&!bImages[ix])return;
+ e.preventDefault();
+ bDrag={x:e.clientX,y:e.clientY,dx:bViews[ix].dx,dy:bViews[ix].dy,ix,type,
+        layout:{...bLayout},ratio:bLayout.ratio};
+ try{bCanvas.setPointerCapture(e.pointerId);}catch(_){}
+};
+$('bFrame').onpointermove=e=>{
+ if(!bDrag)return;e.preventDefault();
+ const rect=bCanvas.getBoundingClientRect(),dx=e.clientX-bDrag.x,dy=e.clientY-bDrag.y;
+ if(bDrag.type==='frame'){
+  bLayout.x=bDrag.layout.x+dx/rect.width;bLayout.y=bDrag.layout.y+dy/rect.height;
+  bSyncAdvanced();
+ }else if(bDrag.type==='resize'){
+  const change=Math.abs(dx)>=Math.abs(dy)?dx/rect.width:dy/rect.height*(IPAD_NATIVE_H/IPAD_NATIVE_W)*bDrag.ratio;
+  bLayout.w=bDrag.layout.w+change;bSyncAdvanced();
+ }else{
+  const r=bDrag.ix===0?{w:rect.width,h:rect.height}:bInset(rect.width,rect.height);
+  const p=bViews[bDrag.ix];p.dx=bDrag.dx+dx/r.w;p.dy=bDrag.dy+dy/r.h;
+ }
+ drawB();
+};
+function bStopDrag(){bDrag=null;}
+$('bFrame').onpointerup=bStopDrag;$('bFrame').onpointercancel=bStopDrag;
+$('bExport').onclick=async()=>{if(!bImages[0]||!bImages[1])return;const b=$('bExport');b.disabled=true;$('bSaveStatus').textContent='画像を生成中…';try{const w=IPAD_NATIVE_W,h=IPAD_NATIVE_H,canvas=document.createElement('canvas');canvas.width=w;canvas.height=h;bDrawTo(canvas.getContext('2d'),w,h);const blob=await blobOfCanvas(canvas);downloadBlob(blob,safeName($('bFilename').value)+'.png');$('bSaveStatus').textContent=`保存を開始しました（${w}×${h} PNG / ${bAdvanced?'Advance':'通常'}モード）`; }catch(e){$('bSaveStatus').textContent=e.message;}finally{b.disabled=false;}};
 
 // ------------------- setlog風: fixed 2-3-2 layout -------------------
 const sCanvas=$('sCanvas'),sCtx=sCanvas.getContext('2d');
